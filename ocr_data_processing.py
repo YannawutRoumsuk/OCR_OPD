@@ -2,6 +2,8 @@ import sys
 import cv2
 import easyocr
 import re
+from dotenv import load_dotenv
+import os
 
 # กำหนด encoding ของ stdout เป็น utf-8
 sys.stdout.reconfigure(encoding='utf-8')
@@ -186,7 +188,7 @@ def extract_keyword_values(keyword_lines):
     'ft3': ['ft3'],
     'pt': ['prothrombin time', 'inr'],
     'ptt': ['aptt time', 'aptt ratio'],
-    'fbs': ['glucosefbs'],
+    'fbs': ['glucose fbs'],
     'lp': ['cholesterol', 'triglyceride', 'hdl', 'ldl-calculate'],
     'afp': ['afp'],
     'cea': ['cea'],
@@ -224,6 +226,81 @@ def extract_keyword_values(keyword_lines):
         for i, line in enumerate(lines):
             line = preprocess_line(line)  # เรียกใช้ฟังก์ชัน preprocess_line เพื่อทำการแทนที่ล่วงหน้า
             
+            # การตรวจจับค่า HN โดยใช้ regex
+            if keyword == 'hn':
+                match = re.match(r'\d{2}-\d{6}', line)  # ตรวจจับรูปแบบ HN เช่น 67-006596
+                if match:
+                    keyword_data['hn']['hn'] = match.group()
+                    continue  # ไปยังบรรทัดถัดไป
+            # การตรวจจับค่า VN โดยดูบรรทัดถัดไป
+            if keyword == 'vn':
+                # ถ้าบรรทัดปัจจุบันมีคำว่า 'vn' ให้ไปดูค่าบรรทัดถัดไป
+                if line.lower() == 'vn' and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()  # ดึงบรรทัดถัดไป
+                    keyword_data['vn']['vn'] = next_line
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+            # การตรวจจับชื่อ
+            if keyword == 'ชื่อ':
+                # ตรวจสอบว่าบรรทัดปัจจุบันคือ "ชื่อ" หรือไม่
+                if line == 'ชื่อ' and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()  # ดึงบรรทัดถัดไปที่เป็นชื่อ
+                    keyword_data['ชื่อ']['ชื่อ'] = next_line
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+                
+                # หากไม่มีคำว่า "ชื่อ" แต่เป็นชื่อเต็มในทันที
+                elif re.match(r'^(นาย|นางสาว|นาง)\s+.+$', line):
+                    keyword_data['ชื่อ']['ชื่อ'] = line.strip()
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+                
+            # การตรวจจับเพศ
+            if keyword == 'เพศ':
+                # ตรวจสอบว่าบรรทัดนี้มีเพศ เช่น "ชาย" หรือ "หญิง"
+                match = re.match(r'^(ชาย|หญิง)$', line.strip())
+                if match:
+                    keyword_data['เพศ']['เพศ'] = match.group(1)
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+                
+            # การตรวจจับอายุ
+            if keyword == 'อายุ':
+                # ใช้ regex เพื่อตรวจจับข้อมูลอายุที่มีคำว่า 'ปี' ตามด้วยข้อมูลอื่น ๆ หรือไม่มี
+                match = re.search(r'(\d+)\s*ปี', line)
+                if match:
+                    keyword_data['อายุ']['อายุ'] = match.group(1)  # เก็บเฉพาะตัวเลขของอายุ (ปี)
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+                
+            # การตรวจจับวันที่
+            if keyword == 'วันที่':
+                # ใช้ regex เพื่อตรวจจับวันที่ในรูปแบบเช่น "15 ก.ค. 67"
+                match = re.match(r'\d{1,2}\s+[ก-ฮ]+\.\s+\d{2}', line.strip())
+                if match:
+                    keyword_data['วันที่']['วันที่'] = match.group()
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+            
+            # การตรวจจับข้อมูลแพทย์
+            elif keyword == 'แพทย์':
+                # ตรวจจับข้อมูลชื่อแพทย์ที่มีคำนำหน้า (เช่น ผศ.นพ, นส.)
+                match = re.match(r'^(ผศ\.นพ|นพ|นส\.|นาย|นางสาว|นาง)\s+[ก-ฮ]+.*', line.strip())
+                if match:
+                    keyword_data['แพทย์']['แพทย์'] = line.strip()
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+                
+            # การตรวจจับค่า CA 19-9
+            if keyword == 'ca 19-9':
+                # ตรวจสอบว่าบรรทัดแรกมีชื่อการทดสอบ
+                if re.search(r'ca 19-9', line, re.IGNORECASE) and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()  # ดึงบรรทัดถัดไปที่เป็นค่าผลลัพธ์
+                    keyword_data['ca 19-9']['ca 19-9'] = next_line
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+                
+            # การตรวจจับค่า BP
+            if keyword == 'bp':
+                # ใช้ regex เพื่อตรวจจับค่าความดันโลหิตในรูปแบบ '119/76'
+                match = re.search(r'(\d{2,3})/(\d{2,3})', line)
+                if match:
+                    bp_value = f"{match.group(1)}/{match.group(2)}"
+                    keyword_data['bp']['bp'] = bp_value
+                    continue  # ไปยังบรรทัดถัดไปหลังจากดึงค่าแล้ว
+            
             if keyword in keyword_dict:
                 keywords = keyword_dict[keyword]
                 match = re.match(r'\b(' + '|'.join(re.escape(k) for k in keywords) + r')\b', line, re.IGNORECASE)
@@ -251,13 +328,31 @@ def extract_keyword_values(keyword_lines):
 
 def print_result(result):
     for category, values in result.items():
-        print(f"{category.upper()}:")
+        print(f"{category.lower()}:")
         for key, value in values.items():
+            key = key.lower().replace(" ", "_").replace("-", "_")
+            if key == "diff":
+                key = "diff_100"
+            elif key == "report":
+                key = "report_nrbc"
+            elif key == "egfr_epi":
+                key = "egfr_epi_ckd_dpi"
+            elif key == "sgot":
+                key = "sgot_ast"
+            elif key == "sgpt":
+                key = "sgpt_alt"
+            elif key == "color":
+                key = "color_ue"
+            elif key == "ca_19_9":
+                key = "ca19_9"
             print(f"  {key}: {value}")
         print()  # เพิ่มบรรทัดว่างระหว่างหมวดหมู่
 
 if __name__ == "__main__":
-    image_path = "opd1_edit.jpg"
+        # โหลดค่าจาก .env
+    load_dotenv()
+    image_path = "opd3_edit.jpg"
+    print(f"Image path: {image_path}")
     keywords = ["hn", "vn", "ชื่อ", "เพศ", "อายุ", "วันที่", "แพทย์", "cbc", "bun", "cr", "elec", "lft", "ua", "tsh", "ft4", "ft3", "pt", "ptt","hbaic", "fbs", "lp", "afp", "cea", "ca153", "ca125", "ca 19-9", "psa", "pi", "bp", "bt", "cc", "bw", "ht", "bmi"]
 
     # อ่านและตรวจสอบข้อความในภาพ
@@ -280,9 +375,9 @@ if __name__ == "__main__":
     print("-----------------------------------------------------------")
     print_result(extracted_data)
     
-    # แสดงผลข้อความทั้งหมดที่ตรวจจับได้จากภาพ
-    print("-------------------------------------------------------------")
-    print("All detected text: ")
-    for bbox, text, confidence in detected_texts:
-        print(f"Text: {text}, Confidence: {confidence:.2f}")
+    # # แสดงผลข้อความทั้งหมดที่ตรวจจับได้จากภาพ
+    # print("-------------------------------------------------------------")
+    # print("All detected text: ")
+    # for bbox, text, confidence in detected_texts:
+    #     print(f"Text: {text}, Confidence: {confidence:.2f}")
 
