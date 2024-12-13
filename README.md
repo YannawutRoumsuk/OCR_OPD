@@ -1,8 +1,57 @@
-# OCR_OPD
- The ocr_without_boxs.py and ocr_with_boxs.py scripts are designed for Optical Character Recognition (OCR) tasks with similar core objectives. The key distinguishing feature is that ocr_with_boxs.py has a special capability of text boxing, which significantly enhances OCR accuracy. Text boxing allows precise definition and localization of text, reducing errors that might occur from broad, unfocused character recognition. In contrast, ocr_without_boxs.py performs OCR in a more generalized manner, without emphasizing specific text bounding, which results in potentially lower accuracy compared to the first script.
-The text boxing technique provides several advantages:
+# OCR Scripts for OPD Cards 
 
-Increased precision in text identification
-Better handling of complex document layouts
-Reduced misinterpretation of characters
-More structured and controlled OCR process
+## Overview
+This repository contains Python scripts for Optical Character Recognition (OCR) specifically designed for reading OPD cards and blood test results using EasyOCR as the primary tool.
+
+## Scripts
+
+### `ocr_without_boxs.py`
+Basic OCR script for reading OPD card information
+
+- General character recognition
+- Reads basic information from OPD cards
+- Medium accuracy
+- Suitable for simple structured documents
+
+### `ocr_with_boxs.py`
+Advanced OCR script for reading blood test results
+
+- Focuses on specific blood test value extraction
+- Uses bounding boxes to enhance accuracy
+- Extracts precise information from blood test results
+- Reduces errors in numeric value recognition
+
+## Key Differences
+
+| Feature | `ocr_without_boxs.py` | `ocr_with_boxs.py` |
+|---------|----------------------|-------------------|
+| Document Type | OPD Card | OPD Card |
+| Accuracy | Medium | High |
+| Bounding Box | No | Yes |
+| Data Extraction | General | Specific |
+
+## Requirements
+- Python 3.x
+- EasyOCR
+- OpenCV
+- Numpy
+- Pandas (for data management)
+
+## Installation
+```bash
+pip install easyocr opencv-python numpy pandas
+```
+
+## Usage
+```bash
+python ocr_without_boxs.py [path_to_opd_card]
+python ocr_with_boxs.py [path_to_blood_test_result]
+```
+
+## Special Features
+- Supports static image files (JPEG, PNG)
+- Processes Thai and English languages
+- Saves results in CSV or Excel files
+
+## Contributing
+Welcome pull requests for improving accuracy and additional document support
